@@ -3,7 +3,6 @@ from datetime import date, timedelta
 from conftest import make_email, make_offer
 from fastapi.testclient import TestClient
 
-from offer_tracker.config import Settings
 from offer_tracker.digest import build_digest, long_date, render_html, short_date
 from offer_tracker.models import ExtractedOffer
 from offer_tracker.pipeline import sync
@@ -65,7 +64,7 @@ def test_empty_digest(store, now):
 def test_dashboard_filters(store, tmp_path):
     store.upsert(make_offer(expires_on=None))
     store.upsert(make_offer(store="Adidas", code="KICKS", expires_on=None))
-    client = TestClient(create_app(Settings.from_env(), offer_store=store))
+    client = TestClient(create_app(offer_store=store))
 
     page = client.get("/")
     assert page.status_code == 200
@@ -83,5 +82,5 @@ def test_date_formats_are_portable():
 def test_dashboard_store_list_skips_expired(store):
     store.upsert(make_offer(store="Gap", code="GONE", expires_on=date(2000, 1, 1)))
     store.upsert(make_offer(expires_on=None))
-    page = TestClient(create_app(Settings.from_env(), offer_store=store)).get("/")
+    page = TestClient(create_app(offer_store=store)).get("/")
     assert ">Gap<" not in page.text
