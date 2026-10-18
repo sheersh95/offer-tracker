@@ -4,8 +4,6 @@ from __future__ import annotations
 
 import argparse
 import logging
-import os
-from datetime import UTC, datetime
 
 from .config import Settings
 
@@ -20,46 +18,33 @@ def main(argv: list[str] | None = None) -> None:
     digest_p = sub.add_parser("digest", help="Build the daily digest")
     digest_p.add_argument("--send", action="store_true", help="Email it to DIGEST_TO")
     digest_p.add_argument("--out", help="Write the HTML to this file")
-    serve_p = sub.add_parser("serve", help="Run the dashboard")
+    serve_p = sub.add_parser("serve", help="Run the dashboard (and open it in your browser)")
     serve_p.add_argument("--host", default="127.0.0.1")
     serve_p.add_argument("--port", type=int, default=8000)
+    serve_p.add_argument("--no-browser", action="store_true", help="Don't open a browser tab")
 
     args = parser.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
     settings = Settings.from_env()
 
-    if args.command == "auth":
-        from .gmail import load_credentials
+    from .actions import Services, connect_gmail, make_digest, send_digest, sync_offers
 
-        load_credentials(settings.credentials_path, settings.token_path, interactive=True)
-        print(f"Saved token to {settings.token_path}")
+    services = Services()
+
+    if args.command == "auth":
+        print(connect_gmail(settings, services), f"(token saved to {settings.token_path})")
 
     elif args.command == "sync":
-        import anthropic
-
-        from .extract import OfferExtractor
-        from .gmail import GmailClient, load_credentials
-        from .pipeline import sync
         from .store import OfferStore
 
-        gmail = GmailClient(load_credentials(settings.credentials_path, settings.token_path))
-        extractor = OfferExtractor(anthropic.Anthropic(), settings.claude_model)
         store = OfferStore(settings.db_path)
-        result = sync(
-            gmail.search(args.query or settings.gmail_query, args.limit), extractor, store
-        )
-        print(
-            f"Checked {result.emails_seen} emails: {result.offers_new} new offers, "
-            f"{result.offers_duplicate} duplicates, {result.emails_skipped} already processed"
-        )
+        print(sync_offers(settings, store, services, args.query, args.limit).summary())
 
     elif args.command == "digest":
-        from .digest import build_digest, render_html
         from .store import OfferStore
 
         store = OfferStore(settings.db_path)
-        digest = build_digest(store, datetime.now(UTC), settings.expiring_soon_days)
-        html = render_html(digest, os.environ.get("DASHBOARD_URL"))
+        digest, html = make_digest(settings, store)
         if args.out:
             with open(args.out, "w", encoding="utf-8") as f:
                 f.write(html)
@@ -67,11 +52,7 @@ def main(argv: list[str] | None = None) -> None:
         if args.send:
             if not settings.digest_to:
                 parser.error("Set DIGEST_TO to send the digest")
-            from .gmail import GmailClient, load_credentials
-
-            gmail = GmailClient(load_credentials(settings.credentials_path, settings.token_path))
-            gmail.send_html(settings.digest_to, digest.subject, html)
-            print(f"Sent digest to {settings.digest_to}")
+            print(send_digest(settings, store, services))
         if not (args.out or args.send):
             print(digest.subject)
 
@@ -80,7 +61,15 @@ def main(argv: list[str] | None = None) -> None:
 
         from .web import create_app
 
-        uvicorn.run(create_app(settings), host=args.host, port=args.port)
+        url = f"http://{args.host}:{args.port}"
+        if not args.no_browser:
+            import threading
+            import webbrowser
+
+            threading.Timer(1.0, webbrowser.open, args=(url,)).start()
+        print(f"Dashboard running at {url} (Ctrl+C to stop)")
+        app = create_app(allowed_hosts=[args.host, "localhost", "127.0.0.1"])
+        uvicorn.run(app, host=args.host, port=args.port, log_level="warning")
 
 
 if __name__ == "__main__":

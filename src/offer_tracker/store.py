@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import functools
 import sqlite3
+import threading
 from datetime import date, datetime
 from pathlib import Path
 
@@ -35,20 +37,34 @@ def dedupe_key(offer: ExtractedOffer) -> str:
     return f"{store}|{ident}"
 
 
+def _locked(method):
+    """The dashboard reads while a background sync writes; serialize access to the connection."""
+
+    @functools.wraps(method)
+    def wrapper(self, *args, **kwargs):
+        with self._lock:
+            return method(self, *args, **kwargs)
+
+    return wrapper
+
+
 class OfferStore:
     def __init__(self, path: Path | str):
         if str(path) != ":memory:":
             Path(path).parent.mkdir(parents=True, exist_ok=True)
+        self._lock = threading.RLock()
         self._db = sqlite3.connect(str(path), check_same_thread=False)
         self._db.row_factory = sqlite3.Row
         self._db.executescript(SCHEMA)
 
+    @_locked
     def is_processed(self, email_id: str) -> bool:
         row = self._db.execute(
             "SELECT 1 FROM processed_emails WHERE email_id = ?", (email_id,)
         ).fetchone()
         return row is not None
 
+    @_locked
     def mark_processed(self, email_id: str) -> None:
         self._db.execute(
             "INSERT OR IGNORE INTO processed_emails VALUES (?, ?)",
@@ -56,6 +72,7 @@ class OfferStore:
         )
         self._db.commit()
 
+    @_locked
     def upsert(self, offer: Offer) -> bool:
         """Insert an offer. Returns False when it duplicates one already stored.
 
@@ -92,6 +109,7 @@ class OfferStore:
         self._db.commit()
         return True
 
+    @_locked
     def active(self, today: date) -> list[Offer]:
         rows = self._db.execute(
             """SELECT * FROM offers
@@ -101,6 +119,7 @@ class OfferStore:
         ).fetchall()
         return [_row_to_offer(r) for r in rows]
 
+    @_locked
     def expired_between(self, start: date, end: date) -> list[Offer]:
         """Offers whose last valid day falls in [start, end)."""
         rows = self._db.execute(
@@ -109,6 +128,7 @@ class OfferStore:
         ).fetchall()
         return [_row_to_offer(r) for r in rows]
 
+    @_locked
     def received_since(self, since: datetime) -> list[Offer]:
         rows = self._db.execute(
             "SELECT * FROM offers WHERE received_at >= ? ORDER BY store, title",
@@ -116,6 +136,7 @@ class OfferStore:
         ).fetchall()
         return [_row_to_offer(r) for r in rows]
 
+    @_locked
     def stores(self) -> list[str]:
         return [r[0] for r in self._db.execute("SELECT DISTINCT store FROM offers ORDER BY store")]
 

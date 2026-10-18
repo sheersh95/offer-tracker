@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 
 from .extract import OfferExtractor
@@ -19,20 +19,42 @@ class SyncResult:
     emails_skipped: int = 0
     offers_new: int = 0
     offers_duplicate: int = 0
+    emails_failed: int = 0
+
+    def summary(self) -> str:
+        text = (
+            f"Checked {self.emails_seen} emails: {self.offers_new} new offers, "
+            f"{self.offers_duplicate} duplicates, {self.emails_skipped} already processed"
+        )
+        if self.emails_failed:
+            text += f", {self.emails_failed} failed (they'll be retried next sync)"
+        return text
 
 
-def sync(emails: Iterable[Email], extractor: OfferExtractor, store: OfferStore) -> SyncResult:
+def sync(
+    emails: Iterable[Email],
+    extractor: OfferExtractor,
+    store: OfferStore,
+    on_progress: Callable[[SyncResult], None] | None = None,
+    fatal: tuple[type[BaseException], ...] = (),
+) -> SyncResult:
+    """`fatal` errors (e.g. a bad API key) stop the run instead of failing every email."""
     result = SyncResult()
     for email in emails:
         result.emails_seen += 1
+        if on_progress:
+            on_progress(result)
         if store.is_processed(email.id):
             result.emails_skipped += 1
             continue
         try:
             extracted = extractor.extract(email)
+        except fatal:
+            raise
         except Exception:
             # Leave the email unprocessed so the next run retries it.
             log.exception("Extraction failed for %s (%s)", email.id, email.subject)
+            result.emails_failed += 1
             continue
         for item in extracted:
             offer = Offer(**item.model_dump(), email_id=email.id, received_at=email.received_at)

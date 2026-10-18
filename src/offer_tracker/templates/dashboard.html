@@ -6,26 +6,51 @@
   <title>Offer Tracker</title>
   <style>
     :root { --bg: #f6f8fa; --card: #fff; --text: #1f2328; --muted: #59636e; --line: #d1d9e0;
-            --accent: #0969da; --warn: #bc4c00; }
+            --accent: #0969da; --warn: #bc4c00; --ok: #1a7f37; --bad: #cf222e; }
     @media (prefers-color-scheme: dark) {
       :root { --bg: #0d1117; --card: #151b23; --text: #e6edf3; --muted: #9198a1; --line: #3d444d;
-              --accent: #4493f8; --warn: #f0883e; }
+              --accent: #4493f8; --warn: #f0883e; --ok: #3fb950; --bad: #f85149; }
     }
     * { box-sizing: border-box; }
     body { margin: 0; font: 15px/1.5 -apple-system, "Segoe UI", Roboto, sans-serif;
            background: var(--bg); color: var(--text); }
     main { max-width: 1000px; margin: 0 auto; padding: 24px 16px; }
     h1 { margin: 0 0 16px; font-size: 24px; }
+    h2 { margin: 0 0 12px; font-size: 16px; }
+    .panel { background: var(--card); border: 1px solid var(--line); border-radius: 8px;
+             padding: 16px; margin-bottom: 16px; }
+    .setup { display: grid; gap: 10px; }
+    .step { display: grid; grid-template-columns: 22px 170px 1fr; gap: 10px; align-items: center; }
+    .step .label { font-weight: 600; }
+    .dot { width: 18px; height: 18px; border-radius: 50%; display: grid; place-items: center;
+           font-size: 12px; color: #fff; background: var(--muted); }
+    .dot.ok { background: var(--ok); }
+    .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+    .row input { flex: 1; min-width: 200px; }
+    textarea { width: 100%; min-height: 90px; font: 12px ui-monospace, Menlo, monospace; }
+    .actions { display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-end; }
+    .actions .group { display: flex; gap: 8px; align-items: center; flex-wrap: wrap;
+                      padding-right: 12px; border-right: 1px solid var(--line); }
+    .actions .group:last-child { border-right: none; }
+    #job { margin-top: 12px; font-size: 14px; color: var(--muted); min-height: 21px; }
+    #job.running::before { content: ""; display: inline-block; width: 10px; height: 10px; margin-right: 8px;
+                           border: 2px solid var(--accent); border-right-color: transparent; border-radius: 50%;
+                           animation: spin .8s linear infinite; vertical-align: -1px; }
+    #job.succeeded { color: var(--ok); } #job.failed { color: var(--bad); }
+    @keyframes spin { to { transform: rotate(360deg); } }
     .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px;
-             margin-bottom: 20px; }
+             margin-bottom: 16px; }
     .stat { background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 12px 16px; }
     .stat b { display: block; font-size: 24px; }
     .stat span { color: var(--muted); font-size: 13px; }
-    form { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
-    input, select, button { font: inherit; padding: 6px 10px; border-radius: 6px;
+    form.filter { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
+    form.filter input { flex: 1; min-width: 180px; }
+    input, select, button, textarea { font: inherit; padding: 6px 10px; border-radius: 6px;
                             border: 1px solid var(--line); background: var(--card); color: var(--text); }
-    input { flex: 1; min-width: 180px; }
-    button { background: var(--accent); color: #fff; border-color: var(--accent); cursor: pointer; }
+    button, .button { background: var(--accent); color: #fff; border: 1px solid var(--accent); cursor: pointer;
+                      text-decoration: none; padding: 6px 12px; border-radius: 6px; font-size: 15px; }
+    button.secondary, .button.secondary { background: var(--card); color: var(--accent); }
+    button:disabled { opacity: .5; cursor: not-allowed; }
     .list { display: grid; gap: 8px; }
     .offer { background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 12px 16px;
              display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
@@ -34,12 +59,91 @@
     .meta .soon { color: var(--warn); font-weight: 600; }
     code { background: var(--bg); border: 1px dashed var(--line); padding: 1px 6px; border-radius: 4px; }
     a { color: var(--accent); }
+    .muted { color: var(--muted); font-size: 13px; }
     .empty { color: var(--muted); padding: 32px; text-align: center; }
+    details summary { cursor: pointer; color: var(--accent); }
+    @media (max-width: 640px) { .step { grid-template-columns: 22px 1fr; } .step > :last-child { grid-column: 1 / -1; } }
   </style>
 </head>
 <body>
 <main>
   <h1>Offer Tracker</h1>
+
+  {% set ready = status.credentials and status.gmail_connected and status.api_key %}
+  <details class="panel" id="setup" {% if not ready %}open{% endif %}>
+    <summary><h2 style="display:inline">Setup {% if ready %}<span class="muted">· all set</span>{% endif %}</h2></summary>
+    <div class="setup" style="margin-top:12px">
+      <div class="step">
+        <span class="dot {% if status.credentials %}ok{% endif %}">{% if status.credentials %}✓{% else %}1{% endif %}</span>
+        <span class="label">Google credentials</span>
+        <div>
+          {% if status.credentials %}<span class="muted">credentials.json found.</span>{% endif %}
+          <details {% if not status.credentials %}open{% endif %}>
+            <summary>{% if status.credentials %}Replace{% else %}Paste the OAuth client JSON you downloaded from Google Cloud{% endif %}</summary>
+            <textarea id="credentials-json" placeholder='{"installed": {"client_id": "...", "client_secret": "...", ...}}'></textarea>
+            <button data-save="credentials_json" data-input="credentials-json">Save credentials</button>
+          </details>
+        </div>
+      </div>
+      <div class="step">
+        <span class="dot {% if status.gmail_connected %}ok{% endif %}">{% if status.gmail_connected %}✓{% else %}2{% endif %}</span>
+        <span class="label">Gmail account</span>
+        <div class="row">
+          <button id="connect" {% if not status.credentials %}disabled{% endif %}
+                  class="{% if status.gmail_connected %}secondary{% endif %}">
+            {% if status.gmail_connected %}Reconnect Gmail{% else %}Connect Gmail{% endif %}
+          </button>
+          <span class="muted">Opens Google sign-in in a new browser tab.</span>
+        </div>
+      </div>
+      <div class="step">
+        <span class="dot {% if status.api_key %}ok{% endif %}">{% if status.api_key %}✓{% else %}3{% endif %}</span>
+        <span class="label">Claude API key</span>
+        <div class="row">
+          <input id="api-key" type="password" autocomplete="off"
+                 placeholder="{% if status.api_key %}Saved. Paste a new key to replace it{% else %}sk-ant-...{% endif %}">
+          <button data-save="anthropic_api_key" data-input="api-key">Save key</button>
+        </div>
+      </div>
+      <div class="step">
+        <span class="dot {% if status.digest_to %}ok{% endif %}">{% if status.digest_to %}✓{% else %}4{% endif %}</span>
+        <span class="label">Digest email</span>
+        <div class="row">
+          <input id="digest-to" type="email" value="{{ status.digest_to or '' }}" placeholder="you@gmail.com">
+          <button data-save="digest_to" data-input="digest-to">Save address</button>
+        </div>
+      </div>
+      <p class="muted" style="margin:0">Everything is stored only on this computer, in the <code>data/</code> folder.</p>
+    </div>
+  </details>
+
+  <section class="panel">
+    <h2>Actions</h2>
+    <div class="actions">
+      <div class="group">
+        <label class="muted" for="days">Look back</label>
+        <select id="days">
+          <option value="1">1 day</option>
+          <option value="3">3 days</option>
+          <option value="7" selected>7 days</option>
+          <option value="30">30 days</option>
+        </select>
+        <label class="muted" for="limit">up to</label>
+        <select id="limit">
+          <option value="25">25 emails</option>
+          <option value="50" selected>50 emails</option>
+          <option value="200">200 emails</option>
+        </select>
+        <button id="sync" {% if not (status.gmail_connected and status.api_key) %}disabled{% endif %}>Sync offers</button>
+      </div>
+      <div class="group">
+        <a class="button secondary" href="/digest" target="_blank" rel="noopener">Preview digest</a>
+        <button id="send" {% if not (status.gmail_connected and status.digest_to) %}disabled{% endif %}>Email me the digest</button>
+      </div>
+    </div>
+    <div id="job" class="{{ status.job.status }}">{% if status.job.status != 'idle' %}{{ status.job.name }}: {{ status.job.message }}{% endif %}</div>
+  </section>
+
   <div class="stats">
     <div class="stat"><b>{{ offers|length }}</b><span>active offers</span></div>
     <div class="stat"><b>{{ expiring }}</b><span>expiring by {{ soon|short_date }}</span></div>
@@ -47,7 +151,7 @@
     <div class="stat"><b>{{ stores|length }}</b><span>stores</span></div>
   </div>
 
-  <form method="get">
+  <form class="filter" method="get">
     <input type="search" name="q" value="{{ q }}" placeholder="Search offers or codes">
     <select name="store">
       <option value="">All stores</option>
@@ -75,9 +179,86 @@
       </div>
     </div>
     {% else %}
-    <div class="empty">No offers match. Run <code>offer-tracker sync</code> to pull new ones.</div>
+    <div class="empty">No offers yet. Finish setup, then press <b>Sync offers</b>.</div>
     {% endfor %}
   </div>
 </main>
+
+<script>
+  const jobEl = document.getElementById("job");
+  let lastStatus = {{ status.job.status | tojson }};
+
+  async function post(url, body = {}) {
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.detail || `Request failed (${res.status})`);
+    return data;
+  }
+
+  function showJob(job) {
+    jobEl.className = job.status;
+    jobEl.textContent = job.status === "idle" ? "" : `${job.name}: ${job.message}`;
+  }
+
+  function showError(err) {
+    jobEl.className = "failed";
+    jobEl.textContent = err.message;
+  }
+
+  async function poll() {
+    const job = await (await fetch("/api/job")).json();
+    showJob(job);
+    if (job.status === "running") {
+      setTimeout(poll, 1000);
+    } else if (lastStatus === "running") {
+      // A job just finished: reload so the offers and setup checklist are current,
+      // keeping the result message visible.
+      sessionStorage.setItem("lastJob", JSON.stringify(job));
+      location.reload();
+    }
+    lastStatus = job.status;
+  }
+
+  async function run(url, body) {
+    try {
+      const job = await post(url, body);
+      lastStatus = "running";
+      showJob(job);
+      setTimeout(poll, 800);
+    } catch (err) {
+      showError(err);
+    }
+  }
+
+  document.getElementById("connect").onclick = () => run("/api/actions/connect-gmail");
+  document.getElementById("sync").onclick = () => run("/api/actions/sync", {
+    days: Number(document.getElementById("days").value),
+    limit: Number(document.getElementById("limit").value),
+  });
+  document.getElementById("send").onclick = () => run("/api/actions/send-digest");
+
+  document.querySelectorAll("[data-save]").forEach((btn) => {
+    btn.onclick = async () => {
+      const input = document.getElementById(btn.dataset.input);
+      try {
+        await post("/api/settings", { [btn.dataset.save]: input.value });
+        sessionStorage.setItem("lastJob", JSON.stringify({ status: "succeeded", name: "Setup", message: "Saved" }));
+        location.reload();
+      } catch (err) {
+        showError(err);
+      }
+    };
+  });
+
+  try {
+    const saved = sessionStorage.getItem("lastJob");
+    if (saved) { showJob(JSON.parse(saved)); sessionStorage.removeItem("lastJob"); }
+  } catch {}
+  if (lastStatus === "running") poll();
+</script>
 </body>
 </html>
