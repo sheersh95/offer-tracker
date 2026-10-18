@@ -1,0 +1,50 @@
+name: Daily digest
+
+on:
+  schedule:
+    - cron: "0 12 * * *" # 12:00 UTC; adjust for your time zone
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  digest:
+    runs-on: ubuntu-latest
+    env:
+      OFFER_TRACKER_DATA_DIR: data
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      DIGEST_TO: ${{ secrets.DIGEST_TO }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install .
+
+      - name: Restore offers database from the last run
+        uses: dawidd6/action-download-artifact@v6
+        with:
+          name: offers-db
+          path: data
+          workflow: daily.yml
+          if_no_artifact_found: ignore
+
+      - name: Write Gmail token
+        env:
+          GMAIL_TOKEN_JSON: ${{ secrets.GMAIL_TOKEN_JSON }}
+        run: |
+          mkdir -p data
+          printf '%s' "$GMAIL_TOKEN_JSON" > data/token.json
+
+      - run: offer-tracker sync
+      - run: offer-tracker digest --send
+
+      - name: Save offers database
+        uses: actions/upload-artifact@v4
+        with:
+          name: offers-db
+          path: data/offers.db
+          retention-days: 90

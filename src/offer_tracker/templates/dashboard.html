@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Offer Tracker</title>
+  <style>
+    :root { --bg: #f6f8fa; --card: #fff; --text: #1f2328; --muted: #59636e; --line: #d1d9e0;
+            --accent: #0969da; --warn: #bc4c00; }
+    @media (prefers-color-scheme: dark) {
+      :root { --bg: #0d1117; --card: #151b23; --text: #e6edf3; --muted: #9198a1; --line: #3d444d;
+              --accent: #4493f8; --warn: #f0883e; }
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; font: 15px/1.5 -apple-system, "Segoe UI", Roboto, sans-serif;
+           background: var(--bg); color: var(--text); }
+    main { max-width: 1000px; margin: 0 auto; padding: 24px 16px; }
+    h1 { margin: 0 0 16px; font-size: 24px; }
+    .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px;
+             margin-bottom: 20px; }
+    .stat { background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 12px 16px; }
+    .stat b { display: block; font-size: 24px; }
+    .stat span { color: var(--muted); font-size: 13px; }
+    form { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
+    input, select, button { font: inherit; padding: 6px 10px; border-radius: 6px;
+                            border: 1px solid var(--line); background: var(--card); color: var(--text); }
+    input { flex: 1; min-width: 180px; }
+    button { background: var(--accent); color: #fff; border-color: var(--accent); cursor: pointer; }
+    .list { display: grid; gap: 8px; }
+    .offer { background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 12px 16px;
+             display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+    .store { font-weight: 600; }
+    .meta { color: var(--muted); font-size: 13px; text-align: right; }
+    .meta .soon { color: var(--warn); font-weight: 600; }
+    code { background: var(--bg); border: 1px dashed var(--line); padding: 1px 6px; border-radius: 4px; }
+    a { color: var(--accent); }
+    .empty { color: var(--muted); padding: 32px; text-align: center; }
+  </style>
+</head>
+<body>
+<main>
+  <h1>Offer Tracker</h1>
+  <div class="stats">
+    <div class="stat"><b>{{ offers|length }}</b><span>active offers</span></div>
+    <div class="stat"><b>{{ expiring }}</b><span>expiring by {{ soon.strftime('%b %-d') }}</span></div>
+    <div class="stat"><b>{{ with_code }}</b><span>with a promo code</span></div>
+    <div class="stat"><b>{{ stores|length }}</b><span>stores</span></div>
+  </div>
+
+  <form method="get">
+    <input type="search" name="q" value="{{ q }}" placeholder="Search offers or codes">
+    <select name="store">
+      <option value="">All stores</option>
+      {% for s in stores %}
+      <option value="{{ s }}" {% if s == selected_store %}selected{% endif %}>{{ s }}</option>
+      {% endfor %}
+    </select>
+    <button type="submit">Filter</button>
+  </form>
+
+  <div class="list">
+    {% for o in offers %}
+    <div class="offer">
+      <div>
+        <div class="store">{{ o.store }}</div>
+        <div>{% if o.url %}<a href="{{ o.url }}" rel="noopener" target="_blank">{{ o.title }}</a>{% else %}{{ o.title }}{% endif %}</div>
+        {% if o.discount and o.discount != o.title %}<div class="meta" style="text-align:left">{{ o.discount }}</div>{% endif %}
+      </div>
+      <div class="meta">
+        {% if o.code %}<div><code>{{ o.code }}</code></div>{% endif %}
+        {% if o.expires_on %}
+          <div class="{% if o.expires_on <= soon %}soon{% endif %}">ends {{ o.expires_on.strftime('%b %-d') }}</div>
+        {% else %}<div>no end date</div>{% endif %}
+        <div>received {{ o.received_at.strftime('%b %-d') }}</div>
+      </div>
+    </div>
+    {% else %}
+    <div class="empty">No offers match. Run <code>offer-tracker sync</code> to pull new ones.</div>
+    {% endfor %}
+  </div>
+</main>
+</body>
+</html>
