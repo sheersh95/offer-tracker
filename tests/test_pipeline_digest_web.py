@@ -4,7 +4,7 @@ from conftest import make_email, make_offer
 from fastapi.testclient import TestClient
 
 from offer_tracker.config import Settings
-from offer_tracker.digest import build_digest, render_html
+from offer_tracker.digest import build_digest, long_date, render_html, short_date
 from offer_tracker.models import ExtractedOffer
 from offer_tracker.pipeline import sync
 from offer_tracker.web import create_app
@@ -73,3 +73,15 @@ def test_dashboard_filters(store, tmp_path):
 
     assert [o["code"] for o in client.get("/api/offers?store=Adidas").json()] == ["KICKS"]
     assert [o["code"] for o in client.get("/api/offers?q=fall").json()] == ["FALL25"]
+
+
+def test_date_formats_are_portable():
+    assert short_date(date(2026, 10, 5)) == "Oct 5"
+    assert long_date(date(2026, 10, 18)) == "Sunday, October 18"
+
+
+def test_dashboard_store_list_skips_expired(store):
+    store.upsert(make_offer(store="Gap", code="GONE", expires_on=date(2000, 1, 1)))
+    store.upsert(make_offer(expires_on=None))
+    page = TestClient(create_app(Settings.from_env(), offer_store=store)).get("/")
+    assert ">Gap<" not in page.text

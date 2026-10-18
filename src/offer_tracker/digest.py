@@ -17,6 +17,19 @@ templates = Environment(
 )
 
 
+def short_date(d: date) -> str:
+    """'Oct 5'. Avoids strftime's %-d, which Windows doesn't support."""
+    return f"{d:%b} {d.day}"
+
+
+def long_date(d: date) -> str:
+    return f"{d:%A, %B} {d.day}"
+
+
+templates.filters["short_date"] = short_date
+templates.filters["long_date"] = long_date
+
+
 @dataclass
 class Digest:
     day: date
@@ -33,7 +46,8 @@ class Digest:
     def subject(self) -> str:
         new = sum(len(v) for v in self.new_by_store.values())
         return (
-            f"Offers for {self.day:%a %b %-d}: {new} new, {len(self.expiring_soon)} expiring soon"
+            f"Offers for {self.day:%a} {short_date(self.day)}: {new} new, "
+            f"{len(self.expiring_soon)} expiring soon"
         )
 
 

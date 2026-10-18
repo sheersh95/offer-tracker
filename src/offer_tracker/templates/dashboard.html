@@ -42,7 +42,7 @@
   <h1>Offer Tracker</h1>
   <div class="stats">
     <div class="stat"><b>{{ offers|length }}</b><span>active offers</span></div>
-    <div class="stat"><b>{{ expiring }}</b><span>expiring by {{ soon.strftime('%b %-d') }}</span></div>
+    <div class="stat"><b>{{ expiring }}</b><span>expiring by {{ soon|short_date }}</span></div>
     <div class="stat"><b>{{ with_code }}</b><span>with a promo code</span></div>
     <div class="stat"><b>{{ stores|length }}</b><span>stores</span></div>
   </div>
@@ -69,9 +69,9 @@
       <div class="meta">
         {% if o.code %}<div><code>{{ o.code }}</code></div>{% endif %}
         {% if o.expires_on %}
-          <div class="{% if o.expires_on <= soon %}soon{% endif %}">ends {{ o.expires_on.strftime('%b %-d') }}</div>
+          <div class="{% if o.expires_on <= soon %}soon{% endif %}">ends {{ o.expires_on|short_date }}</div>
         {% else %}<div>no end date</div>{% endif %}
-        <div>received {{ o.received_at.strftime('%b %-d') }}</div>
+        <div>received {{ o.received_at|short_date }}</div>
       </div>
     </div>
     {% else %}

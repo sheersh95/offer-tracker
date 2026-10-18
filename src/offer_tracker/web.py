@@ -38,11 +38,12 @@ def create_app(settings: Settings | None = None, offer_store: OfferStore | None 
     @app.get("/", response_class=HTMLResponse)
     def dashboard(store: str | None = None, q: str | None = None) -> str:
         today = date.today()
-        offers = filter_offers(db.active(today), store, q)
+        active = db.active(today)
+        offers = filter_offers(active, store, q)
         soon = today + timedelta(days=settings.expiring_soon_days)
         return templates.get_template("dashboard.html").render(
             offers=offers,
-            stores=db.stores(),
+            stores=sorted({o.store for o in active}),
             selected_store=store,
             q=q or "",
             today=today,

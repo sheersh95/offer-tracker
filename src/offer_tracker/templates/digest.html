@@ -1,7 +1,7 @@
 <!doctype html>
 <html>
 <body style="font-family: -apple-system, Segoe UI, Roboto, sans-serif; color: #1f2328; max-width: 640px; margin: 0 auto; padding: 16px;">
-  <h1 style="font-size: 20px; margin: 0 0 4px;">Your offers for {{ d.day.strftime('%A, %B %-d') }}</h1>
+  <h1 style="font-size: 20px; margin: 0 0 4px;">Your offers for {{ d.day|long_date }}</h1>
   <p style="color: #59636e; margin: 0 0 24px;">{{ d.active_count }} active offers tracked</p>
 
   {% if d.expiring_soon %}
@@ -11,7 +11,7 @@
     <tr style="border-bottom: 1px solid #eee;">
       <td style="padding: 6px 0;"><strong>{{ o.store }}</strong> · {{ o.title }}</td>
       <td style="padding: 6px 0; text-align: right; white-space: nowrap;">
-        {% if o.code %}<code>{{ o.code }}</code> · {% endif %}ends {{ o.expires_on.strftime('%b %-d') }}
+        {% if o.code %}<code>{{ o.code }}</code> · {% endif %}ends {{ o.expires_on|short_date }}
       </td>
     </tr>
     {% endfor %}
@@ -27,7 +27,7 @@
     <li>
       {% if o.url %}<a href="{{ o.url }}">{{ o.title }}</a>{% else %}{{ o.title }}{% endif %}
       {% if o.code %} · code <code>{{ o.code }}</code>{% endif %}
-      {% if o.expires_on %} · until {{ o.expires_on.strftime('%b %-d') }}{% endif %}
+      {% if o.expires_on %} · until {{ o.expires_on|short_date }}{% endif %}
     </li>
     {% endfor %}
   </ul>

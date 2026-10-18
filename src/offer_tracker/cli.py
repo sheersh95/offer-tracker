@@ -61,7 +61,7 @@ def main(argv: list[str] | None = None) -> None:
         digest = build_digest(store, datetime.now(UTC), settings.expiring_soon_days)
         html = render_html(digest, os.environ.get("DASHBOARD_URL"))
         if args.out:
-            with open(args.out, "w") as f:
+            with open(args.out, "w", encoding="utf-8") as f:
                 f.write(html)
             print(f"Wrote {args.out}")
         if args.send:
